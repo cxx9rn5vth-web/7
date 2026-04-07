@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>زور السعودية - تجربة الخريطة الذكية</title>
+    
+    <!-- Leaflet CSS for Real Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Readex+Pro:wght@200;400;700;900&family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        saudi: { green: '#006C35', gold: '#D4AF37', dark: '#003D1E', sand: '#FDFCF9', cream: '#FFFDF5' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root { --font-ar: 'Readex Pro', sans-serif; --font-en: 'Playfair Display', serif; --font-hero: 'Aref Ruqaa', serif; }
+        body { font-family: var(--font-ar); background-color: #FDFCF9; color: #003D1E; scroll-behavior: smooth; }
+        [dir="ltr"] body { font-family: var(--font-en); }
+        .hero-heading { font-family: var(--font-hero); line-height: 1.2; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        
+        .sadu-pattern { 
+            background-color: #006C35; 
+            background-image: radial-gradient(#D4AF37 0.5px, transparent 0.5px); 
+            background-size: 30px 30px; 
+            position: relative; 
+        }
+        .sadu-pattern::after { 
+            content: ""; position: absolute; inset: 0; 
+            background: linear-gradient(to bottom, rgba(0,61,30,0.85), rgba(0,108,53,0.95)); 
+        }
+
+        .city-card { 
+            transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1); 
+            border: 1px solid rgba(212, 175, 55, 0.15); 
+            background: white; 
+            border-radius: 2.5rem; 
+            cursor: pointer; 
+        }
+        .city-card:hover { transform: translateY(-10px); border-color: #D4AF37; box-shadow: 0 40px 70px -20px rgba(0, 61, 30, 0.15); }
+        
+        /* Map Modal Styling */
+        #mapModal { display: none; }
+        #map { height: 100%; width: 100%; }
+        .leaflet-container { background: #002b16 !important; }
+        .map-frame { border: 4px solid #D4AF37; border-radius: 2rem; overflow: hidden; height: 70vh; }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav class="bg-white/95 backdrop-blur-md border-b border-saudi-gold/10 sticky top-0 z-[100]">
+        <div class="max-w-7xl mx-auto px-8 h-24 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-saudi-green rounded-full flex items-center justify-center shadow-lg"><span class="text-2xl">🇸🇦</span></div>
+                <span id="brandName" class="text-2xl font-black text-saudi-green uppercase tracking-tighter">زور السعودية</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <!-- Map Button -->
+                <button onclick="openMap()" class="px-6 py-2 rounded-full font-bold border-2 border-saudi-gold text-saudi-gold hover:bg-saudi-gold hover:text-white transition-all flex items-center gap-2">
+                    <span id="mapBtnText">الخريطة</span> 🗺️
+                </button>
+                <button onclick="toggleLanguage()" id="langBtn" class="px-6 py-2 rounded-full font-bold border-2 border-saudi-green text-saudi-green hover:bg-saudi-green hover:text-white transition-all">English</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <header class="sadu-pattern py-36 px-6 text-center relative overflow-hidden">
+        <div class="relative z-10 max-w-5xl mx-auto">
+            <h1 id="heroTitle" class="hero-heading text-6xl md:text-[6.5rem] text-white mb-10">اكتشف أرض العراقة والمستقبل</h1>
+            <p id="heroSub" class="text-2xl md:text-3xl text-saudi-gold font-light opacity-90 tracking-wide">رحلة لا تُنسى في قلب الجزيرة العربية</p>
+        </div>
+    </header>
+
+    <!-- Cities Grid -->
+    <main class="max-w-7xl mx-auto px-8 py-20">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10" id="citiesGrid"></div>
+    </main>
+
+    <!-- Full Screen Map Modal -->
+    <div id="mapModal" class="fixed inset-0 z-[200] bg-saudi-dark/90 backdrop-blur-xl flex items-center justify-center p-6">
+        <div class="w-full max-w-6xl">
+            <div class="flex justify-between items-center mb-6 text-white">
+                <h2 id="mapHeading" class="text-3xl font-black uppercase tracking-widest text-saudi-gold">استكشف جغرافية المملكة</h2>
+                <button onclick="closeMap()" class="bg-white/10 hover:bg-white/20 p-4 rounded-full text-white text-2xl transition-all">✕</button>
+            </div>
+            <div class="map-frame shadow-2xl">
+                <div id="map"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- City Details Modal -->
+    <div id="cityModal" class="fixed inset-0 z-[300] hidden items-center justify-center p-6 bg-saudi-dark/60 backdrop-blur-md" onclick="closeModal()">
+        <div class="bg-saudi-cream w-full max-w-3xl rounded-[4rem] p-12 md:p-16 relative text-center shadow-2xl border-t-[14px] border-saudi-gold" onclick="event.stopPropagation()">
+            <div id="modalIcon" class="text-9xl mb-8"></div>
+            <h2 id="modalName" class="text-6xl font-black text-saudi-green mb-8"></h2>
+            
+            <div class="inline-flex flex-col bg-saudi-green text-white px-14 py-5 rounded-3xl mb-10 shadow-xl border border-saudi-gold/20">
+                <span id="bestTimeLabel" class="text-saudi-gold text-xs font-bold uppercase tracking-[0.3em] mb-1">أفضل وقت للزيارة</span>
+                <span id="modalBestTime" class="text-3xl font-bold"></span>
+            </div>
+
+            <p id="modalDesc" class="text-gray-700 text-2xl mb-12 leading-relaxed italic opacity-90"></p>
+            <div id="modalLandmarks" class="flex flex-wrap justify-center gap-4"></div>
+            
+            <button onclick="closeModal()" id="closeBtn" class="mt-16 w-full bg-saudi-green text-white py-6 rounded-3xl font-black text-2xl">إغلاق</button>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let currentLang = 'ar';
+        let map;
+        let markers = [];
+
+        const cities = [
+            { id: 1, lat: 26.62, lng: 37.92, icon: "🏺", name: {ar: "العلا", en: "AlUla"}, time: {ar: "أكتوبر - أبريل", en: "Oct - Apr"}, desc: {ar: "متحف حي يروي قصة الحضارات القديمة.", en: "A living museum of ancient civilizations."}, marks: {ar: ["قصر الفريد", "الحجر", "مرايا"], en: ["Hegra", "Elephant Rock", "Maraya"]} },
+            { id: 2, lat: 24.71, lng: 46.67, icon: "🏙️", name: {ar: "الرياض", en: "Riyadh"}, time: {ar: "نوفمبر - مارس", en: "Nov - Mar"}, desc: {ar: "نبض المملكة ومركز الحداثة والتراث.", en: "The heart of the Kingdom and hub of modernity."}, marks: {ar: ["الدرعية", "برج المملكة", "البوليفارد"], en: ["Diriyah", "Kingdom Tower", "Boulevard"]} },
+            { id: 3, lat: 21.48, lng: 39.19, icon: "⚓", name: {ar: "جدة", en: "Jeddah"}, time: {ar: "ديسمبر - مارس", en: "Dec - Mar"}, desc: {ar: "عروس البحر الأحمر ومدينة الفن التاريخي.", en: "Red Sea bride and city of historic art."}, marks: {ar: ["البلد", "نافورة الملك فهد", "الواجهة"], en: ["Historic Jeddah", "Fountain", "Waterfront"]} },
+            { id: 4, lat: 18.21, lng: 42.50, icon: "☁️", name: {ar: "أبها", en: "Abha"}, time: {ar: "يونيو - أغسطس", en: "Jun - Aug"}, desc: {ar: "سيدة الضباب والجمال الجبلي الخلاب.", en: "The city of fog and mountain beauty."}, marks: {ar: ["السودة", "رجال ألمع", "الحبلة"], en: ["Soudah", "Rijal Almaa", "Habala"]} },
+            { id: 5, lat: 28.00, lng: 35.00, icon: "✨", name: {ar: "نيوم", en: "NEOM"}, time: {ar: "طوال العام", en: "Year-round"}, desc: {ar: "أرض المستقبل والابتكار العالمي.", en: "The land of the future and innovation."}, marks: {ar: ["ذا لاين", "سندالة", "تروجينا"], en: ["The Line", "Sindalah", "Trojena"]} },
+            { id: 6, lat: 21.38, lng: 39.85, icon: "🕋", name: {ar: "مكة", en: "Makkah"}, time: {ar: "طوال العام", en: "Year-round"}, desc: {ar: "أقدس بقاع الأرض ووجهة الملايين.", en: "The holiest place on earth."}, marks: {ar: ["المسجد الحرام", "غار حراء", "الساعة"], en: ["Grand Mosque", "Hira Cave", "Clock Tower"]} },
+            { id: 7, lat: 24.46, lng: 39.61, icon: "🕊️", name: {ar: "المدينة", en: "Madinah"}, time: {ar: "أكتوبر - مارس", en: "Oct - Mar"}, desc: {ar: "طيبة الطيبة ومدينة السكينة والهدوء.", en: "The city of the Prophet, full of peace."}, marks: {ar: ["المسجد النبوي", "قباء", "أحد"], en: ["Prophet's Mosque", "Quba", "Uhud"]} },
+            { id: 8, lat: 25.38, lng: 49.58, icon: "🌴", name: {ar: "الأحساء", en: "Al-Ahsa"}, time: {ar: "نوفمبر - مارس", en: "Nov - Mar"}, desc: {ar: "أكبر واحة نخيل في العالم وتراث عريق.", en: "World's largest palm oasis."}, marks: {ar: ["جبل القارة", "القيصرية", "الأصفر"], en: ["Mount Qara", "Souq", "Yellow Lake"]} },
+            { id: 9, lat: 21.27, lng: 40.41, icon: "🌸", name: {ar: "الطائف", en: "Taif"}, time: {ar: "مارس - أغسطس", en: "Mar - Aug"}, desc: {ar: "مدينة الورد ومصيف المملكة التاريخي.", en: "City of roses and summer resort."}, marks: {ar: ["الهدا", "الشفا", "شبرا"], en: ["Al-Hada", "Al-Shafa", "Shubra"]} },
+            { id: 10, lat: 26.21, lng: 50.19, icon: "💎", name: {ar: "الخبر", en: "Khobar"}, time: {ar: "نوفمبر - مارس", en: "Nov - Mar"}, desc: {ar: "جوهرة الشرق ووجهة الترفيه الحديث.", en: "The pearl of the East and modern leisure."}, marks: {ar: ["إثراء", "الجسر", "الكورنيش"], en: ["Ithra", "Bridge", "Corniche"]} }
+        ];
+
+        function initMap() {
+            if (map) return; 
+            map = L.map('map').setView([24.0, 44.0], 5);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: 'Visit Saudi'
+            }).addTo(map);
+            renderMarkers();
+        }
+
+        function renderMarkers() {
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            cities.forEach(city => {
+                const marker = L.circleMarker([city.lat, city.lng], {
+                    radius: 10, fillColor: "#D4AF37", color: "#fff", weight: 2, fillOpacity: 0.8
+                }).addTo(map);
+                marker.bindTooltip(city.name[currentLang], { direction: 'top', className: 'font-bold' });
+                marker.on('click', () => { closeMap(); showCity(city.id); });
+                markers.push(marker);
+            });
+        }
+
+        function openMap() {
+            document.getElementById('mapModal').style.display = 'flex';
+            setTimeout(() => {
+                initMap();
+                map.invalidateSize(); 
+            }, 100);
+        }
+
+        function closeMap() { document.getElementById('mapModal').style.display = 'none'; }
+
+        function renderCities() {
+            const grid = document.getElementById('citiesGrid');
+            grid.innerHTML = '';
+            cities.forEach(city => {
+                grid.innerHTML += `
+                    <div class="city-card p-12 text-center group" onclick="showCity(${city.id})">
+                        <div class="text-8xl mb-10 transform transition-all duration-700 group-hover:scale-125">${city.icon}</div>
+                        <h3 class="text-2xl font-black text-saudi-green mb-4">${city.name[currentLang]}</h3>
+                        <p class="text-saudi-gold font-bold text-xs uppercase tracking-[0.3em] opacity-60 group-hover:opacity-100 transition-all">${currentLang === 'ar' ? 'استكشف الوجهة' : 'Discover'}</p>
+                    </div>`;
+            });
+        }
+
+        function showCity(id) {
+            const city = cities.find(c => c.id === id);
+            document.getElementById('modalIcon').innerText = city.icon;
+            document.getElementById('modalName').innerText = city.name[currentLang];
+            document.getElementById('modalBestTime').innerText = city.time[currentLang];
+            document.getElementById('modalDesc').innerText = `"${city.desc[currentLang]}"`;
+            const marksDiv = document.getElementById('modalLandmarks');
+            marksDiv.innerHTML = '';
+            city.marks[currentLang].forEach(m => {
+                marksDiv.innerHTML += `<div class="bg-white px-8 py-3 rounded-2xl font-bold border border-saudi-gold/20 text-saudi-dark shadow-sm"># ${m}</div>`;
+            });
+            document.getElementById('cityModal').style.display = 'flex';
+        }
+
+        function closeModal() { document.getElementById('cityModal').style.display = 'none'; }
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'ar' ? 'en' : 'ar';
+            document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
+            document.getElementById('langBtn').innerText = currentLang === 'ar' ? 'English' : 'العربية';
+            document.getElementById('brandName').innerText = currentLang === 'ar' ? 'زور السعودية' : 'VISIT SAUDI';
+            document.getElementById('heroTitle').innerText = currentLang === 'ar' ? 'اكتشف أرض العراقة والمستقبل' : 'Discover Heritage & Future';
+            document.getElementById('heroSub').innerText = currentLang === 'ar' ? 'رحلة لا تُنسى في قلب الجزيرة العربية' : 'An unforgettable journey in the heart of Arabia';
+            document.getElementById('mapBtnText').innerText = currentLang === 'ar' ? 'الخريطة' : 'Map';
+            document.getElementById('mapHeading').innerText = currentLang === 'ar' ? 'استكشف جغرافية المملكة' : 'Explore Kingdom Geography';
+            document.getElementById('bestTimeLabel').innerText = currentLang === 'ar' ? 'أفضل وقت للزيارة' : 'Best Time to Visit';
+            document.getElementById('closeBtn').innerText = currentLang === 'ar' ? 'إغلاق' : 'Close';
+            if (map) renderMarkers();
+            renderCities();
+        }
+
+        window.onload = () => { renderCities(); };
+    </script>
+</body>
+</html>
